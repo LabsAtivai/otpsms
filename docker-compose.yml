@@ -1,0 +1,62 @@
+version: '3.9'
+
+services:
+  otp-postgres:
+    image: postgres:16-alpine
+    container_name: otp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sms_otp_db
+      POSTGRES_USER: otp_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - otp_postgres_data:/var/lib/postgresql/data
+    networks:
+      - otp-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U otp_user -d sms_otp_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  otp-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: otp-api
+    restart: unless-stopped
+    depends_on:
+      otp-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://otp_user:${POSTGRES_PASSWORD}@otp-postgres:5432/sms_otp_db
+      JWT_SECRET: ${JWT_SECRET}
+      DEVICE_API_TOKEN: ${DEVICE_API_TOKEN}
+      PORT: 3000
+      NODE_ENV: production
+      FRONTEND_URL: ${FRONTEND_URL}
+    volumes:
+      - otp_logs:/app/logs
+    networks:
+      - otp-internal
+      - ativaai
+
+  otp-frontend:
+    image: nginx:alpine
+    container_name: otp-frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/frontend.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - ativaai
+
+volumes:
+  otp_postgres_data:
+  otp_logs:
+
+networks:
+  otp-internal:
+    driver: bridge
+  ativaai:
+    external: true

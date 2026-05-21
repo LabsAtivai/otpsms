@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SmsCode {
+  id          String   @id @default(uuid())
+  sender      String
+  service     String
+  rawMessage  String
+  code        String
+  device      String
+  receivedAt  DateTime
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@map("sms_codes")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(READER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  accessLogs AccessLog[]
+
+  @@map("users")
+}
+
+model Device {
+  id        String   @id @default(uuid())
+  name      String
+  tokenHash String   @unique
+  active    Boolean  @default(true)
+  lastSeen  DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("devices")
+}
+
+model AccessLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  ip        String
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@map("access_logs")
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  READER
+}

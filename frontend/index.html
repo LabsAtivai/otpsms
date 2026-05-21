@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTP Central</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a22;
+      --surface2: #1e2330;
+      --border: #2a3040;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --accent-dim: rgba(59,130,246,0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --yellow: #f59e0b;
+      --yellow-dim: rgba(245,158,11,0.12);
+      --red: #ef4444;
+      --radius: 10px;
+      --font: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Login ── */
+    #login-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .login-card h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: -0.3px;
+    }
+
+    .login-card p {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 28px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-group input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 11px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.15s;
+    }
+
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error-msg {
+      color: var(--red);
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    /* ── App ── */
+    #app { display: none; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 30px;
+      height: 30px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+      margin-right: 6px;
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-badge {
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface2);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .btn-logout {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 12px;
+      border-radius: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .btn-logout:hover { color: var(--text); border-color: var(--muted); }
+
+    .main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+
+    .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .stat-card .value { font-size: 24px; font-weight: 700; font-family: var(--font); }
+    .stat-card .value.green { color: var(--green); }
+    .stat-card .value.blue { color: var(--accent); }
+
+    /* ── Search ── */
+    .search-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .search-row input {
+      flex: 1;
+      padding: 9px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search-row input:focus { border-color: var(--accent); }
+
+    .btn-clear {
+      padding: 9px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* ── Codes list ── */
+    .section-title {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    #codes-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .code-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      animation: slideIn 0.25s ease;
+      transition: border-color 0.15s;
+    }
+
+    .code-card:hover { border-color: var(--accent); }
+    .code-card.new-pulse { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-dim); }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .service-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+
+    .code-info { flex: 1; min-width: 0; }
+
+    .code-service {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .code-sender {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .code-number {
+      font-family: var(--font);
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: var(--accent);
+      flex-shrink: 0;
+      min-width: 130px;
+      text-align: center;
+    }
+
+    .code-meta { text-align: right; flex-shrink: 0; }
+
+    .code-time {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .countdown {
+      font-size: 12px;
+      font-family: var(--font);
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .countdown.ok { color: var(--green); background: var(--green-dim); }
+    .countdown.warn { color: var(--yellow); background: var(--yellow-dim); }
+    .countdown.critical { color: var(--red); background: rgba(239,68,68,0.12); }
+
+    .btn-copy {
+      padding: 7px 14px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: 7px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+      margin-left: 12px;
+    }
+
+    .btn-copy:hover { background: rgba(59,130,246,0.25); }
+    .btn-copy.copied { background: var(--green-dim); color: var(--green); border-color: rgba(34,197,94,0.3); }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--green);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 14px;
+      color: var(--green);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.25s;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 600px) {
+      .code-number { font-size: 20px; letter-spacing: 2px; min-width: 100px; }
+      .code-card { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>🔐 OTP Central</h1>
+    <p>Sistema corporativo de códigos SMS</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="admin@empresa.com.br" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Senha</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" id="btn-login">Entrar</button>
+    <p class="error-msg" id="login-error" style="display:none"></p>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">🔑</div>
+      <h1>OTP Central</h1>
+      <span class="status-dot" id="status-dot"></span>
+      <span style="font-size:12px;color:var(--muted)" id="status-text">Conectando...</span>
+    </div>
+    <div class="header-right">
+      <span class="user-badge" id="user-badge"></span>
+      <button class="btn-logout" id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="label">Códigos ativos</div>
+        <div class="value green" id="stat-active">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Recebidos hoje</div>
+        <div class="value blue" id="stat-today">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Último recebido</div>
+        <div class="value" id="stat-last" style="font-size:14px;padding-top:4px">—</div>
+      </div>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="search" placeholder="Filtrar por serviço (Google, AWS...)">
+      <button class="btn-clear" id="btn-clear">Limpar</button>
+    </div>
+
+    <div class="section-title">Códigos ativos</div>
+
+    <div id="codes-list">
+      <div class="empty-state">
+        <div class="icon">📭</div>
+        <p>Aguardando códigos SMS...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast de notificação -->
+<div id="toast"></div>
+
+<script>
+  // ── Configuração ──────────────────────────────────────────────────────────
+  // NPM roteia /api/ e /socket.io/ para otp-api, resto para otp-frontend
+  const API_URL = window.location.origin;
+
+  let token = localStorage.getItem('otp_token');
+  let allCodes = [];
+  let socket = null;
+  let countdownInterval = null;
+  let todayCount = 0;
+
+  // ── Ícones por serviço ────────────────────────────────────────────────────
+  const SERVICE_ICONS = {
+    'Google': '🔵', 'Microsoft': '🟦', 'Azure': '☁️',
+    'AWS': '🟠', 'Amazon': '🟠', 'GitHub': '⚫',
+    'GitLab': '🦊', 'Facebook': '🔵', 'Instagram': '💜',
+    'WhatsApp': '🟢', 'Twitter/X': '⬛', 'LinkedIn': '🔷',
+    'Slack': '💬', 'Discord': '💙', 'Telegram': '✈️',
+    'PayPal': '🅿️', 'Stripe': '🟣', 'MercadoPago': '💛',
+    'Nubank': '🟣', 'Itaú': '🟠', 'Bradesco': '🔴',
+    'Santander': '🔴', 'Banco do Brasil': '🟡', 'Caixa': '🔵',
+    'Banco Inter': '🟠', 'Dropbox': '🔵',
+  };
+
+  function getIcon(service) {
+    return SERVICE_ICONS[service] || '💬';
+  }
+
+  // ── Utilidades ────────────────────────────────────────────────────────────
+  function formatTime(dateStr) {
+    return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function getCountdown(expiresAt) {
+    const diff = Math.max(0, new Date(expiresAt) - new Date());
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return { diff, text: `${mins}:${secs.toString().padStart(2,'0')}` };
+  }
+
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  function copyCode(code, btnEl) {
+    navigator.clipboard.writeText(code).then(() => {
+      const orig = btnEl.textContent;
+      btnEl.textContent = '✓ Copiado';
+      btnEl.classList.add('copied');
+      setTimeout(() => { btnEl.textContent = orig; btnEl.classList.remove('copied'); }, 2000);
+      showToast(`Código ${code} copiado!`);
+    });
+  }
+
+  // ── Renderização ──────────────────────────────────────────────────────────
+  function renderCodes(codes) {
+    const list = document.getElementById('codes-list');
+    const filter = document.getElementById('search').value.toLowerCase();
+
+    const filtered = codes.filter(c =>
+      !filter || c.service.toLowerCase().includes(filter) || c.sender.toLowerCase().includes(filter)
+    );
+
+    document.getElementById('stat-active').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>${filter ? 'Nenhum resultado para "'+filter+'"' : 'Aguardando códigos SMS...'}</p></div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(code => {
+      const { diff, text } = getCountdown(code.expiresAt);
+      const pct = diff / (10 * 60 * 1000); // 10 min = vida total
+      const cls = pct > 0.5 ? 'ok' : pct > 0.2 ? 'warn' : 'critical';
+
+      return `
+        <div class="code-card" id="card-${code.id}">
+          <div class="service-icon">${getIcon(code.service)}</div>
+          <div class="code-info">
+            <div class="code-service">${code.service}</div>
+            <div class="code-sender">${code.sender} · ${code.device}</div>
+          </div>
+          <div class="code-number">${code.code}</div>
+          <div class="code-meta">
+            <div class="code-time">${formatTime(code.receivedAt)}</div>
+            <div class="countdown ${cls}" data-expires="${code.expiresAt}">${text}</div>
+          </div>
+          <button class="btn-copy" onclick="copyCode('${code.code}', this)">Copiar</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function startCountdowns() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      // Remover expirados
+      allCodes = allCodes.filter(c => new Date(c.expiresAt) > new Date());
+      // Atualizar contadores sem re-renderizar tudo
+      document.querySelectorAll('.countdown').forEach(el => {
+        const { diff, text } = getCountdown(el.dataset.expires);
+        el.textContent = text;
+        el.className = 'countdown ' + (diff > 5*60000 ? 'ok' : diff > 2*60000 ? 'warn' : 'critical');
+        if (diff === 0) renderCodes(allCodes);
+      });
+    }, 1000);
+  }
+
+  // ── API ───────────────────────────────────────────────────────────────────
+  async function fetchCodes() {
+    try {
+      const res = await fetch(`${API_URL}/codes`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.status === 401) { logout(); return; }
+      allCodes = await res.json();
+      renderCodes(allCodes);
+      startCountdowns();
+    } catch (e) {
+      console.error('Erro ao buscar códigos:', e);
+    }
+  }
+
+  async function fetchTodayCount() {
+    try {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const res = await fetch(`${API_URL}/codes/history?from=${today.toISOString()}&limit=1000`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        todayCount = data.length;
+        document.getElementById('stat-today').textContent = todayCount;
+      }
+    } catch {}
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  function connectSocket() {
+    socket = io(API_URL, { auth: { token } });
+
+    socket.on('connect', () => {
+      document.getElementById('status-dot').classList.add('connected');
+      document.getElementById('status-text').textContent = 'Conectado';
+    });
+
+    socket.on('disconnect', () => {
+      document.getElementById('status-dot').classList.remove('connected');
+      document.getElementById('status-text').textContent = 'Reconectando...';
+    });
+
+    socket.on('NEW_CODE', (code) => {
+      // Adicionar no início da lista
+      allCodes = [code, ...allCodes];
+      renderCodes(allCodes);
+      startCountdowns();
+
+      // Atualizar stats
+      todayCount++;
+      document.getElementById('stat-today').textContent = todayCount;
+      document.getElementById('stat-last').textContent = `${code.service} ${formatTime(code.receivedAt)}`;
+
+      // Notificação
+      showToast(`📨 Novo código ${code.service}: ${code.code}`);
+
+      // Destacar o card por 3s
+      setTimeout(() => {
+        const card = document.getElementById(`card-${code.id}`);
+        if (card) {
+          card.classList.add('new-pulse');
+          setTimeout(() => card.classList.remove('new-pulse'), 3000);
+        }
+      }, 100);
+
+      // Notificação do browser (se permitido)
+      if (Notification.permission === 'granted') {
+        new Notification(`OTP Central — ${code.service}`, {
+          body: `Código: ${code.code}`,
+          icon: '/favicon.ico',
+        });
+      }
+    });
+  }
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  async function login() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('btn-login');
+    const errEl = document.getElementById('login-error');
+
+    if (!email || !password) {
+      errEl.textContent = 'Preencha email e senha';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+    errEl.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Erro no login';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      token = data.token;
+      localStorage.setItem('otp_token', token);
+      showApp(data.user);
+    } catch {
+      errEl.textContent = 'Erro de conexão com o servidor';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('otp_token');
+    token = null;
+    if (socket) socket.disconnect();
+    if (countdownInterval) clearInterval(countdownInterval);
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+
+  function showApp(user) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('user-badge').textContent = `${user.email} · ${user.role}`;
+
+    // Pedir permissão para notificações
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    fetchCodes();
+    fetchTodayCount();
+    connectSocket();
+  }
+
+  // ── Verificar sessão existente ────────────────────────────────────────────
+  if (token) {
+    // Validar token fazendo uma requisição rápida
+    fetch(`${API_URL}/codes?limit=1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(res => {
+      if (res.ok) {
+        // Decodificar JWT para pegar user info (sem lib, apenas base64)
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          showApp(payload);
+        } catch { logout(); }
+      } else {
+        logout();
+      }
+    }).catch(() => {
+      // Servidor fora, mas mantém tela de login
+      document.getElementById('login-screen').style.display = 'flex';
+    });
+  }
+
+  // ── Event listeners ───────────────────────────────────────────────────────
+  document.getElementById('btn-login').addEventListener('click', login);
+  document.getElementById('btn-logout').addEventListener('click', logout);
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    document.getElementById('search').value = '';
+    renderCodes(allCodes);
+  });
+  document.getElementById('search').addEventListener('input', () => renderCodes(allCodes));
+  document.getElementById('password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') login();
+  });
+</script>
+</body>
+</html>
