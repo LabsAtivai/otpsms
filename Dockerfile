@@ -1,20 +1,16 @@
-FROM node:20-alpine
+FROM node:20-slim
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copiar package.json do backend
 COPY backend/package*.json ./
-RUN npm ci --production=false
+RUN npm ci
 
-# Copiar restante do backend
 COPY backend/ .
 
-# Gerar Prisma client e buildar TypeScript
 RUN npx prisma generate
 RUN npm run build
-
-# Remover devDependencies
-RUN npm prune --production
 
 RUN mkdir -p logs
 
