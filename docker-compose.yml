@@ -1,5 +1,4 @@
 version: '3.9'
-
 services:
   otp-postgres:
     image: postgres:16-alpine
@@ -41,7 +40,7 @@ services:
       - otp-internal
       - ativaai
 
- otp-frontend:
+  otp-frontend:
     image: nginx:alpine
     container_name: otp-frontend
     restart: unless-stopped
