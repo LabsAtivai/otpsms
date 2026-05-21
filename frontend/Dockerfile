@@ -1,5 +1,5 @@
 FROM nginx:alpine
-COPY index.html /usr/share/nginx/html/index.html
+COPY frontend/index.html /usr/share/nginx/html/index.html
 RUN echo 'server { \
     listen 80; \
     root /usr/share/nginx/html; \
