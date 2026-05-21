@@ -461,7 +461,7 @@
 <script>
   // ── Configuração ──────────────────────────────────────────────────────────
   // NPM roteia /api/ e /socket.io/ para otp-api, resto para otp-frontend
-  const API_URL = window.location.origin;
+  const API_URL = window.location.origin + '/api';
 
   let token = localStorage.getItem('otp_token');
   let allCodes = [];
@@ -600,7 +600,7 @@
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   function connectSocket() {
-    socket = io(API_URL, { auth: { token } });
+    socket = io(window.location.origin, { auth: { token } });
 
     socket.on('connect', () => {
       document.getElementById('status-dot').classList.add('connected');
