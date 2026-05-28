@@ -10,30 +10,28 @@ import { logger } from '../services/logger';
 const router = Router();
 const prisma = new PrismaClient();
 
-// ── POST /sms ─────────────────────────────────────────────────────────────────
-// Chamado pelo Tasker no Android quando um SMS é recebido
-// Body: { sender, message, device, receivedAt }
 router.post('/', smsRateLimit, deviceAuth, async (req: Request, res: Response) => {
-  const { sender, message, device, receivedAt } = req.body;
+  // Aceita tanto JSON body quanto query string
+  // Query string é mais segura para o MacroDroid (escapa caracteres especiais automaticamente)
+  const sender  = req.body.sender  || req.query.sender  as string;
+  const message = req.body.message || req.query.message as string;
+  const device  = req.body.device  || req.query.device  as string || 'android-01';
+  const receivedAt = req.body.receivedAt || req.query.receivedAt as string;
 
-  // Validação básica
   if (!sender || !message) {
     return res.status(400).json({ error: 'sender e message são obrigatórios' });
   }
 
-  // Extração do código OTP
   const code = extractOtp(message);
 
-  // Se não encontrou código numérico, ignora silenciosamente
-  // (evita poluir o banco com SMS comuns como promoções)
   if (!code) {
-    logger.debug(`SMS sem código OTP detectado: "${message.substring(0, 50)}..."`);
+    logger.debug(`SMS sem código OTP: "${message.substring(0, 50)}"`);
     return res.json({ received: true, code: null, ignored: true });
   }
 
   const service = classifyService(sender, message);
   const receivedAtDate = receivedAt ? new Date(receivedAt) : new Date();
-  const expiresAt = new Date(receivedAtDate.getTime() + 10 * 60 * 1000); // 10 minutos
+  const expiresAt = new Date(receivedAtDate.getTime() + 10 * 60 * 1000);
 
   try {
     const smsCode = await prisma.smsCode.create({
@@ -43,15 +41,14 @@ router.post('/', smsRateLimit, deviceAuth, async (req: Request, res: Response) =
         service,
         rawMessage: message,
         code,
-        device: device || 'android-01',
+        device,
         receivedAt: receivedAtDate,
         expiresAt,
       },
     });
 
-    logger.info(`Novo código OTP: ${service} → ${code} (expira ${expiresAt.toISOString()})`);
+    logger.info(`Novo OTP: ${service} → ${code}`);
 
-    // ── Emite evento WebSocket para o dashboard atualizar instantaneamente ──
     io.emit('NEW_CODE', {
       id: smsCode.id,
       service: smsCode.service,
@@ -62,15 +59,10 @@ router.post('/', smsRateLimit, deviceAuth, async (req: Request, res: Response) =
       expiresAt: smsCode.expiresAt,
     });
 
-    return res.status(201).json({
-      received: true,
-      code,
-      service,
-      expiresAt,
-    });
+    return res.status(201).json({ received: true, code, service, expiresAt });
   } catch (err) {
     logger.error('Erro ao salvar SMS:', err);
-    return res.status(500).json({ error: 'Erro interno ao salvar código' });
+    return res.status(500).json({ error: 'Erro interno' });
   }
 });
 
